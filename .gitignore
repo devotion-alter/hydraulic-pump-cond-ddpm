@@ -1,0 +1,18 @@
+# 原始数据（大文件，不上传）
+00DATA/
+
+# 降采样缓存（即原始数据内容）；保留 cache/*.json（归一化参数、缓存元信息）
+cache/*.npy
+
+# 训练/生成/评价输出
+outputs/
+
+# 模型权重
+*.pt
+
+# Claude Code 本地设置
+.claude/settings.local.json
+
+# Python 缓存
+__pycache__/
+*.pyc

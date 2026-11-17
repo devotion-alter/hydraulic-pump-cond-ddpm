@@ -1,0 +1,86 @@
+﻿# 液压泵双工况条件 1D DDPM 配置
+# 所有相对路径均相对项目根目录
+
+project:
+  seed: 42
+  out_dir: outputs            # 训练/生成/评价输出根目录
+  run_name: cfg_ddpm_v1
+
+# ---------------- 数据 ----------------
+data:
+  raw_dir: 00DATA
+  cache_dir: cache            # 降采样后的缓存 (npy)，不修改原始 CSV
+  encoding: gbk               # CSV 表头为 GBK 编码
+  header_lines: 3             # 前 3 行元信息: FileType / SampleRate / ChanNum，第 4 行为列名
+  # 只读取这 9 路振动通道（按列名选取，而非按列位置），顺序即模型通道顺序
+  channels: [电压_0, 电压_1, 电压_2, 电压_3, 电压_4, 电压_5, 电压_6, 电压_7, 电压_8]
+  raw_fs: 100000
+  target_fs: 10000
+  read_chunk_rows: 1000000    # 分块读取行数（必须为降采样倍数的整数倍）
+  resample_context: 2000      # 块间滤波上下文（原始采样点数，降采样倍数的整数倍，> FIR 半长 100）
+  edge_trim_s: 0.05           # 去除文件开头的滤波边缘效应（秒），截取从此处开始
+  segment_duration_s: 50      # 每个文件统一截取 50 s（两工况数据量一致），再在其中划分 Train/Val/Test
+
+  # 运行工况标签（不是故障类别）：每个 CSV 一种工况，文件名编号即条件标签。
+  # labels: auto -> 自动扫描 raw_dir 下文件名为纯数字的 CSV（19.csv -> 标签 19）；
+  #   也可写成显式列表，例如 [19, 20]。
+  # 模型内部 Embedding 索引按标签升序映射为 0..K-1（19->0, 20->1），对外一律使用文件编号。
+  labels: auto
+  label_desc:                 # 仅用于图表/文件注释，可随时修改
+    19: full_flow (全流量)
+    20: zero_flow (零流量)
+
+  window_size: 1024
+  stride: 512
+  # 每个文件按连续时间段划分（先划分、再切窗），段间留隔离间隔
+  split_ratio: {train: 0.70, val: 0.15, test: 0.15}
+  split_gap: 2048             # 段间隔离（10 kHz 下的采样点数，>= window_size，保证窗口无重叠）
+  norm_file: norm_stats.json  # 训练集拟合的逐通道 z-score 参数（两工况共用）
+
+# ---------------- 模型 ----------------
+model:
+  channels: 9
+  seq_length: 1024
+  dim: 64
+  dim_mults: [1, 2, 4, 8]
+  num_classes: auto           # auto = 工况标签个数
+  cond_drop_prob: 0.1         # CFG 训练时随机丢弃条件的概率（替换为 null embedding）
+  dropout: 0.0
+
+diffusion:
+  timesteps: 1000
+  sampling_timesteps: 1000    # < timesteps 时使用 DDIM 加速采样
+  objective: pred_noise       # CFG 组合噪声预测，第一版固定 pred_noise
+  beta_schedule: cosine
+  clip_x0: 6.0                # z-score 空间中 x0 预测的裁剪范围（仓库默认裁剪到 [-1,1]，不适用于 z-score 数据）
+
+# ---------------- 训练 ----------------
+train:
+  batch_size: 32
+  lr: 1.0e-4
+  train_steps: 40000
+  ema_decay: 0.995
+  ema_update_every: 10
+  grad_clip: 1.0
+  amp: false
+  num_workers: 0
+  log_every: 100
+  val_every: 1000             # 验证：按工况统计扩散损失 + 条件敏感性检查
+  save_every: 2000
+  val_num_t: 10               # 验证时对每个窗口评估的固定时间步数
+
+# ---------------- 生成 ----------------
+sample:
+  num_per_condition: 128
+  batch_size: 64
+  guidance_scales: [1.0, 2.0, 3.0]
+  default_guidance_scale: 2.0
+  sampling_timesteps: 1000    # 1000 = 完整 DDPM 祖先采样；如 250 则为 DDIM
+  save_format: [npy, csv]     # csv 仅保存每工况前 csv_max_windows 个窗口（体积考虑）
+  csv_max_windows: 8
+
+# ---------------- 评价 ----------------
+eval:
+  num_real: 256               # 每工况用于对比的真实测试窗口数（不足则全用）
+  welch_nperseg: 256
+  plot_windows: 1             # 时域对比图示例窗口数

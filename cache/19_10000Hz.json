@@ -1,0 +1,24 @@
+{
+  "src": "E:\\02folder\\06CODE\\01GUIYAN\\01DDPM\\00DATA\\19.csv",
+  "size": 1335684729,
+  "mtime": 1784549324.0,
+  "channels": [
+    "电压_0",
+    "电压_1",
+    "电压_2",
+    "电压_3",
+    "电压_4",
+    "电压_5",
+    "电压_6",
+    "电压_7",
+    "电压_8"
+  ],
+  "raw_fs": 100000,
+  "target_fs": 10000,
+  "ctx": 2000,
+  "n_raw": 5727000,
+  "n_out": 572700,
+  "duration_s": 57.27,
+  "method": "scipy.signal.resample_poly(up=1, down=10, window=kaiser 5.0) chunked w/ context",
+  "elapsed_s": 7.5
+}
